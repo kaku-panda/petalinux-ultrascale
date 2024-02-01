@@ -1,0 +1,80 @@
+/include/ "system-conf.dtsi"
+/ {
+	bootargs = "earlycon clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk root=/dev/mmcblk0p2 rw rootwait cma=1024M rootfstype=ext4 devtmpfs.mount=0";
+};
+
+&sdhci1 {
+	no-1-8-v;
+	disable-wp;
+};
+
+&amba_pl {
+	/* 114.285MHz reference crystal (X9 on ZCU102) for Si5324 clock for HDMI */
+	refhdmi: refhdmi {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <114285000>;
+	};
+};
+
+/* IIC controller with Si5324 clock generator and DP159 retimer for HDMI TX */
+&Evaluate_Module_HDMI_Interface_IIC {
+	status = "okay";
+	
+	/* Si5324 i2c clock generator */
+	si5324: clock-generator@68 {
+		status = "okay";
+		compatible = "silabs,si5324";
+		reg = <0x68>;
+		 #address-cells = <1>;
+		 #size-cells = <0>;
+		 #clock-cells = <1>;
+		
+		/* input clock(s); the XTAL is hard-wired on the ZCU102 board */
+		clocks = <&refhdmi>;
+		clock-names = "xtal";
+		
+		/* output clocks */
+		clk0 {
+			reg = <0>;
+			/* HDMI TX reference clock output frequency */
+			clock-frequency = <27000000>;
+		};
+	};
+
+	/* DP159 exposes a virtual CCF clock. Upon .set_rate(), it adapts its retiming/driving behaviour */
+	dp159: hdmi-retimer@5e {
+		status = "okay";
+		compatible = "ti,dp159";
+		reg = <0x5e>;
+		#address-cells = <1>;
+		#size-cells = <0>;
+		#clock-cells = <0>;
+	};
+};
+
+
+&Evaluate_Module_HDMI_Interface_VID_PHY_CTRL {
+	clock-names = "mgtrefclk0_pad_p_in", "mgtrefclk0_pad_n_in", "mgtrefclk1_pad_p_in", "mgtrefclk1_pad_n_in", "gtsouthrefclk0_in", "gtsouthrefclk0_odiv2_in", "vid_phy_tx_axi4s_aclk", "vid_phy_rx_axi4s_aclk", "vid_phy_sb_aclk", "vid_phy_axi4lite_aclk", "drpclk", "dru-clk";
+	clocks = <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_1>, <&misc_clk_1>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&si570_2>;
+};
+
+&Evaluate_Module_HDMI_Interface_HDMI_RX_SS {
+	clock-names = "s_axi_cpu_aclk", "link_clk", "s_axis_audio_aclk", "video_clk", "s_axis_video_aclk";
+	clocks = <&misc_clk_0>, <&misc_clk_1>, <&misc_clk_2>, <&misc_clk_3>, <&misc_clk_2>;
+};
+
+&Evaluate_Module_HDMI_Interface_HDMI_TX_SS {
+	clock-names = "s_axi_cpu_aclk", "link_clk", "s_axis_audio_aclk", "video_clk", "s_axis_video_aclk", "txref-clk", "retimer-clk";
+	clocks = <&misc_clk_0>, <&misc_clk_1>, <&misc_clk_2>, <&misc_clk_3>, <&misc_clk_2>, <&misc_clk_4>, <&misc_clk_4>;
+};
+
+&Evaluate_Module_DMA_Interface_VDMA_MEM {
+	Evaluate_Module_DMA_Interface_VDMA_MEMEvaluate_Module_HDMI_Interface_HDMI_RX_SS: endpoint {
+		remote-endpoint = <&hdmirx_outEvaluate_Module_HDMI_Interface_HDMI_RX_SS>;
+	};
+};
+
+&Evaluate_Module_USERSPACE_IO {
+	compatible = "generic-uio";
+};

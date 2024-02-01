@@ -1,0 +1,198 @@
+/include/ "system-conf.dtsi"
+/ {
+	chosen {
+		//bootargs = " earlycon clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk root=/dev/mmcblk0p2 rw rootwait cma=1024M rootfstype=ext4 devtmpfs.mount=0";
+		bootargs = "earlycon clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk root=/dev/sda1 rw rootwait cma=1024M rootfstype=ext4 devtmpfs.mount=0 video=HDMI-A-1:1920x1080@60";
+		//bootargs = " earlycon clk_ignore_unused uio_pdrv_genirq.of_id=generic-uio earlyprintk root=/dev/sda1 rw rootwait cma=1024M rootfstype=ext4 devtmpfs.mount=0";
+	};
+};
+
+&sdhci1 {
+	//no-1-8-v;
+	disable-wp;
+};
+
+&amba_pl {
+	/* 114.285MHz reference crystal (X9 on ZCU102) for Si5324 clock for HDMI */
+	refhdmi: refhdmi {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <114285000>;
+	};
+
+	Evaluate_Module_HDMI_Interface_IIC: i2c@a0060000 {
+		status = "okay";
+		
+		//* Si5324 i2c clock generator */
+		si5324: clock-generator@68 {
+			status = "okay";
+			compatible = "silabs,si5324";
+			reg = <0x68>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			#clock-cells = <1>;
+			
+			/* input clock(s); the XTAL is hard-wired on the ZCU102 board */
+			clocks = <&refhdmi>;
+			clock-names = "xtal";
+			
+			/* output clocks */
+			clk0 {
+				reg = <0>;
+				/* HDMI TX reference clock output frequency */
+				clock-frequency = <27000000>;
+			};
+		};//* Si5324 i2c clock generator */
+		
+		/* DP159 exposes a virtual CCF clock. Upon .set_rate(), it adapts its retiming/driving behaviour */
+		dp159: hdmi-retimer@5e {
+			status = "okay";
+			compatible = "ti,dp159";
+			reg = <0x5e>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			#clock-cells = <0>;
+		};
+	};
+	v_drm_dmaengine_drv: drm-dmaengine-drv {
+	//v_pl_disp: drm-pl-disp-drv {
+		compatible = "xlnx,pl-disp";
+		dmas = <&Evaluate_Module_DMA_Interface_VDMA_TXBUF 0>;
+		dma-names = "dma0";
+		xlnx,vformat = "BG24";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		//xlnx,bridge = <&Evaluate_Module_DMA_Interface_VDMA_TXBUF>;
+		//xlnx,disp-bridge = <&&Evaluate_Module_DMA_Interface_VDMA_TXBUF>;
+		//xlnx,bridge = <&Evaluate_Module_DMA_Interface_VTC>;
+		dmaengine_port: port@0 {
+			reg = <0>;
+			dmaengine_crtc: endpoint {
+				remote-endpoint = <&hdmi_encoder>;
+			};
+		};
+	};
+
+	xilinx_drm_hdmi: xilinx_drm {
+		compatible = "xlnx,drm";
+		xlnx,encoder-slave = <&Evaluate_Module_HDMI_Interface_HDMI_TX_SS>;
+		xlnx,connector-type = "HDMIA";
+		//xlnx,vtc = <&Evaluate_Module_DMA_Interface_VTC>;
+		status = "okay";
+		//clocks = <&misc_clk_2>;
+		clocks = <&si570_2>;
+		planes {
+			xlnx,pixel-format = "rgb888";
+			plane0 {
+				dma = <&Evaluate_Module_DMA_Interface_VDMA_TXBUF 0>;
+				dma-names = "dma0";
+			};
+		};
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+		reserved_0: buffer@0x0a000000 {
+			no-map;
+			reg = <0x0a000000 0x1000000>;
+		};
+		reserved_1: buffer@0x0b000000 {
+			no-map;
+			reg = <0x0b000000 0x1000000>;
+		};
+	};
+	
+	reserved-driver@0 {
+		compatible = "xlnx,reserved-memory";
+		memory-region = <&reserved_0>;
+	};
+	
+	reserved-driver@1 {
+		compatible = "xlnx,reserved-memory";
+		memory-region = <&reserved_1>;
+	};
+
+
+	//vcap_hdmi {
+	//	status = "okay";
+	//	compatible = "xlnx,video";
+	//	dmas = <&Evaluate_Module_DMA_Interface_VDMA_RXBUF 0>;
+	//	dma-names = "port0";
+	//	ports {
+	//		#address-cells = <1>;
+	//		#size-cells = <0>;
+	//		port@0 {
+	//			reg = <0>;
+	//			direction = "output";
+	//			Evaluate_Module_DMA_Interface_VDMA_RXBUFEvaluate_Module_HDMI_Interface_HDMI_RX_SS: endpoint {
+	//				remote-endpoint = <&Evaluate_Module_DMA_Interface_VDMA_RXBUFEvaluate_Module_HDMI_Interface_HDMI_RX_SS>;
+	//			};
+	//		};
+	//	};
+	//};
+};
+
+/* IIC controller with Si5324 clock generator and DP159 retimer for HDMI TX */
+
+&Evaluate_Module_HDMI_Interface_VID_PHY_CTRL {
+	clock-names = "mgtrefclk0_pad_p_in", "mgtrefclk0_pad_n_in", "mgtrefclk1_pad_p_in", "mgtrefclk1_pad_n_in", "gtsouthrefclk0_in", "gtsouthrefclk0_odiv2_in", "vid_phy_tx_axi4s_aclk", "vid_phy_rx_axi4s_aclk", "vid_phy_sb_aclk", "vid_phy_axi4lite_aclk", "drpclk", "dru-clk";
+	clocks = <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_3>, <&misc_clk_3>, <&misc_clk_0>, <&misc_clk_0>, <&misc_clk_0>, <&si570_2>;
+};
+
+&Evaluate_Module_HDMI_Interface_HDMI_RX_SS {
+	clock-names = "s_axi_cpu_aclk", "link_clk", "s_axis_audio_aclk", "video_clk", "s_axis_video_aclk";
+	clocks = <&misc_clk_0>, <&misc_clk_3>, <&misc_clk_1>, <&misc_clk_4>, <&misc_clk_1>;
+};
+
+&Evaluate_Module_HDMI_Interface_HDMI_TX_SS {
+	clock-names = "s_axi_cpu_aclk", "link_clk", "s_axis_audio_aclk", "video_clk", "s_axis_video_aclk", "txref-clk", "retimer-clk";
+	clocks = <&misc_clk_0>, <&misc_clk_3>, <&misc_clk_1>, <&misc_clk_4>, <&misc_clk_1>, <&si5324 0>, <&dp159>;
+	hdmitx_portsEvaluate_Module_HDMI_Interface_HDMI_TX_SS: ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		encoder_hdmi_portEvaluate_Module_HDMI_Interface_HDMI_TX_SS: port@0 {
+			reg = <0>;
+			hdmi_encoder: endpoint {
+				remote-endpoint = <&dmaengine_crtc>;
+			};
+		};
+	};
+};
+
+&Evaluate_Module_DMA_Interface_VDMA_RXBUF {
+	ports {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		port@0 {
+			reg = <0>;
+			Evaluate_Module_DMA_Interface_VDMA_RXBUFEvaluate_Module_HDMI_Interface_HDMI_RX_SS: endpoint {
+				remote-endpoint = <&Evaluate_Module_DMA_Interface_VDMA_RXBUFEvaluate_Module_HDMI_Interface_HDMI_RX_SS>;
+			};
+		};
+	};
+};
+
+//&Evaluate_Module_DMA_Interface_VDMA_TXBUF {
+//	ports {
+//		#address-cells = <1>;
+//		#size-cells = <0>;
+//		port@0{
+//			reg = <0>;
+//			VDMA_TXBUF_MM2S: endpoint {
+//				remote-endpoint = <&video1>;
+//			};
+//		};
+//	};
+//};
+
+
+//&Evaluate_Module_DMA_Interface_VTC {
+//	compatible = "xlnx,bridge-v-tc-6.1";
+//	xlnx,pixels-per-clock = <1>;
+//};
+
+&Evaluate_Module_USERSPACE_IO {
+	compatible = "generic-uio";
+};
